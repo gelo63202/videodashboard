@@ -1,0 +1,7 @@
+streamlit
+moviepy
+openai
+requests
+numpy
+opencv-python
+aiohttp
