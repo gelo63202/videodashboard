@@ -1,13 +1,13 @@
 import streamlit as st
-from moviepy import (
+from moviepy.editor import (
     VideoFileClip,
     concatenate_videoclips,
     TextClip,
     CompositeVideoClip,
     vfx,
-    AudioFileClip,
+    AudioFileClip
 )
-from moviepy.video.fx import LumContrast
+from moviepy.video.fx.all import lum_contrast
 import tempfile
 import os
 import openai
@@ -277,17 +277,34 @@ def predict_video_performance(description, hashtags, audio):
 # Funzione per aggiungere audio al video
 def add_audio_to_video(video_path, audio_url):
     """
-    Aggiunge un audio al video.
+    Aggiunge un audio al video con una verifica e conversione del file audio.
     """
     # Scarica l'audio
     audio_response = requests.get(audio_url)
+    if audio_response.status_code != 200:
+        raise ValueError(f"Errore durante il download dell'audio: {audio_url}")
+    
+    # Salva l'audio in un file temporaneo
     audio_temp = tempfile.mktemp(suffix=".mp3")
     with open(audio_temp, "wb") as f:
         f.write(audio_response.content)
     
+    # Verifica se il file audio è valido
+    valid_audio_temp = tempfile.mktemp(suffix=".mp3")
+    try:
+        # Utilizza ffmpeg per verificare e convertire il file audio se necessario
+        command = f"ffmpeg -y -i {audio_temp} -vn -acodec libmp3lame {valid_audio_temp}"
+        os.system(command)
+        
+        # Controlla se il file convertito esiste
+        if not os.path.exists(valid_audio_temp) or os.path.getsize(valid_audio_temp) == 0:
+            raise ValueError("File audio non valido o conversione fallita.")
+    except Exception as e:
+        raise ValueError(f"Errore durante la conversione dell'audio: {e}")
+    
     # Carica audio e video
     video = VideoFileClip(video_path)
-    audio = AudioFileClip(audio_temp)
+    audio = AudioFileClip(valid_audio_temp)
     
     # Imposta l'audio al video
     final_video = video.set_audio(audio)
@@ -297,7 +314,7 @@ def add_audio_to_video(video_path, audio_url):
     final_video.write_videofile(output_path, codec="libx264", audio_codec="aac", threads=4)
     
     return output_path
-
+    
 # Funzione per salvare il progetto
 def save_project(user, files, edited_video_path, description, hashtags, audio, performance_analysis):
     """
